@@ -1,0 +1,57 @@
+{% extends "navbar.html" %}
+
+{% block content %}
+<div style="margin-top: 10px;"></div>
+<div class="row">
+    <div class="col-lg-12">
+        <h3 style="margin-left: 15px; margin-bottom: 15px; margin-top: 15px;">Your Orders:</h3>
+
+        {% for order in user.orders %}
+        <!-- Order details (ID, total, tracking, items) inside a single box -->
+        <div class="box-element" style="border: 2px solid #ccc; border-radius: 15px; padding: 20px;">
+            <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
+                <h5>Order ID: <strong>{{ order.id }}</strong></h5>
+                <h5>Total: <strong>${{ "%.2f"|format(order.total) }}</strong></h5>
+            </div>
+
+            <!-- Tracking Information Section -->
+            <h5>Tracking Information:</h5>
+            {% if order.tracking_number %}
+                <div class="tracking-info" style="border-top: 2px solid #ddd; padding-top: 10px;">
+                    <p><strong>Tracking Number:</strong> {{ order.tracking_number }}</p>
+                    <p><strong>Status:</strong> {{ order.tracking_status }}</p>
+                    <p><strong>Carrier:</strong> {{ order.tracking_carrier }}</p>
+                    <a href="{{ order.tracking_url }}" target="_blank" class="btn btn-outline-info">Track Your Order</a>
+                </div>
+            {% else %}
+                <p>No tracking information available for this order.</p>
+            {% endif %}
+
+            <br>
+            <!-- Order Items Section -->
+            <div class="order-row font-weight-bold" style="align-items: center; display: flex; border-bottom: 2px solid #ddd; padding-bottom: 10px;">
+                <div style="flex:2"></div>
+                <div style="flex:4">Item</div>
+                <div style="flex:1">Quantity / Total</div>
+            </div>
+
+            {% for item in order.items %}
+            <div class="order-row" style="align-items: center; display: flex; border-bottom: 1px solid #eee; padding: 10px 0;">
+                <div style="flex:2">
+                    <img class="row-image icon" src="{{ item.product.product_image }}">
+                </div>
+                <div style="flex:4; display: flex; align-items: center;">
+                    <p class="mb-0">{{ item.product.product_name }}</p>
+                </div>
+
+                <div style="flex:1; display: flex; justify-content: space-between; align-items: center;">
+                    <p class="mb-0">{{ item.quantity }}</p>
+                    <p class="mb-0">${{ "%.2f"|format(item.subtotal) }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock content %}

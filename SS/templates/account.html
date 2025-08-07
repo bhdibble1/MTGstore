@@ -1,0 +1,16 @@
+{% extends "navbar.html" %}
+{% block content %}
+<div class="container">
+    <div class="card shadow-sm" style="max-width: 400px; margin: auto; margin-top: 70px;">
+        <div class="card-body">
+            <h4 class="card-title text-center mb-4">Account Details</h4>
+            <p><strong>Email:</strong> {{ current_user.email }}</p>
+            <div class="text-center mt-4">
+                <a href="{{ url_for('main.logout') }}" class="btn btn-danger">Logout</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+

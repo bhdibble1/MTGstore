@@ -1,0 +1,78 @@
+{% extends "navbar.html" %}
+{% block content %}
+
+<form method="POST" action="" enctype="multipart/form-data">
+    {{ form.hidden_tag() }}
+    <fieldset class="form-group">
+        <legend class="border-bottom mb-4">Add Product</legend>
+
+        <!-- Product Name -->
+        <div class="form-group">
+            {{ form.product_name.label(class="form-control-label") }}
+            {% if form.product_name.errors %}
+                {{ form.product_name(class="form-control form-control-lg is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.product_name.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.product_name(class="form-control form-control-lg") }}
+            {% endif %}
+        </div>
+
+        <!-- Product Description -->
+        <div class="form-group">
+            {{ form.product_description.label(class="form-control-label") }}
+            {% if form.product_description.errors %}
+                {{ form.product_description(class="form-control form-control-lg is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.product_description.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.product_description(class="form-control form-control-lg") }}
+            {% endif %}
+        </div>
+
+        <!-- Quantity -->
+        <div class="form-group">
+            {{ form.quantity.label(class="form-control-label") }}
+            {% if form.quantity.errors %}
+                {{ form.quantity(class="form-control form-control-lg is-invalid") }}
+                <div class="invalid-feedback">
+                    {% for error in form.quantity.errors %}
+                        <span>{{ error }}</span>
+                    {% endfor %}
+                </div>
+            {% else %}
+                {{ form.quantity(class="form-control form-control-lg") }}
+            {% endif %}
+        </div>
+
+        <!-- Product Image -->
+        <div class="form-group">
+            {{ form.product_image.label(class="form-control-label") }}
+            {{ form.product_image(class="form-control-file") }}
+            {% if form.product_image.errors %}
+                {% for error in form.product_image.errors %}
+                    <span class="text-danger">{{ error }}</span><br>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- Featured -->
+        <div class="form-group form-check">
+            {{ form.featured(class="form-check-input") }}
+            {{ form.featured.label(class="form-check-label") }}
+        </div>
+    </fieldset>
+
+    <!-- Submit Button -->
+    <div class="form-group">
+        {{ form.submit(class="btn btn-outline-info") }}
+    </div>
+</form>
+
+{% endblock content %}

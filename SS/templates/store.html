@@ -1,0 +1,227 @@
+{% extends "navbar.html" %}
+
+{% block content %}
+<div id="flash-container" class="container position-fixed top-0 start-50 translate-middle-x mt-3" style="z-index: 2000; max-width: 500px;"></div>
+
+<div class="container" style="margin-top: 100px;">
+
+    <h2>Browse Magic Cards</h2>
+
+    <!-- Flash Notification Area -->
+    <div id="flash-container" class="my-3"></div>
+
+    <!-- Card Search Form -->
+    <form id="card-search-form" autocomplete="off" onsubmit="return false;">
+        <div class="position-relative">
+            <input
+                type="text"
+                id="card-name"
+                name="card_name"
+                class="form-control"
+                placeholder="Search for a Magic card..."
+            />
+            <ul
+                id="card-suggestions"
+                class="list-group position-absolute w-100 mt-1"
+                style="z-index: 1000; max-height: 300px; overflow-y: auto;"
+            ></ul>
+        </div>
+    </form>
+
+    <!-- Card Results -->
+    <div id="card-results" class="row mt-4">
+        <!-- Full product page for clicked card will be dynamically rendered here -->
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+$(function() {
+    const $input         = $('#card-name');
+    const $suggestions   = $('#card-suggestions');
+    const $results       = $('#card-results');
+    const $cartTotal     = $('#cart-total'); // Assumes an element with ID 'cart-total' exists in the navbar
+    const $flashContainer = $('#flash-container');
+
+    // Fetch suggestions as the user types
+    function fetchSuggestions(query) {
+        $.ajax({
+            type: 'GET',
+            url: '/store/card-search',
+            data: { card_name: query },
+            success(response) {
+                $suggestions.empty();
+                if (response.error) {
+                    $suggestions.append(
+                        `<li class="list-group-item disabled">${response.error}</li>`
+                    );
+                } else {
+                    response.forEach(card => {
+                        const $li = $(`<li class="list-group-item list-group-item-action">${card.name}</li>`)
+                            .data('card', card);
+                        $suggestions.append($li);
+                    });
+                }
+            },
+            error() {
+                $suggestions.empty().append(
+                    `<li class="list-group-item disabled">Error fetching suggestions</li>`
+                );
+            }
+        });
+    }
+
+    // Trigger suggestion fetching on input
+    $input.on('input', function() {
+        const val = $(this).val().trim();
+        if (val.length > 2) {
+            fetchSuggestions(val);
+        } else {
+            $suggestions.empty();
+            $results.empty();
+        }
+    });
+
+    // On suggestion click, render the product page
+    $suggestions.on('click', 'li.list-group-item-action', function() {
+        const card = $(this).data('card');
+        if (!card) return;
+        $input.val(card.name);
+        $suggestions.empty();
+
+        // Render product details with form
+        $results.html(`
+            <div class="col-12">
+                <div class="row gx-5">
+                    <!-- Left: Image -->
+                    <div class="col-md-6 text-center">
+                        <img style="margin-top: 100px; margin-left: 150px;" src="${card.image}" class="product-img rounded mt-3" alt="${card.name}">
+                    </div>
+                    <!-- Right: Details -->
+                    <div class="col-md-6">
+                        <h3>${card.name}</h3>
+                        <p class="text-muted">Magic: The Gathering</p>
+                        <h5>Product Details</h5>
+                        <p>Each card is shipped in a protective sleeve.</p>
+
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <p class="text-uppercase mb-1">Condition</p>
+                                <p class="mb-3">Near Mint</p>
+
+                                ${card.out_of_stock
+                                    ? `<p class="text-danger fw-bold">Out of Stock</p>`
+                                    : `
+                                    <p class="text-uppercase mb-1">Price</p>
+                                    <h4 class="mb-3">$${card.price}</h4>
+
+                                    <p class="text-uppercase mb-1">In Stock</p>
+                                    <p class="mb-3">${card.quantity} available</p>
+
+                                    <form id="add-to-cart-form">
+                                        <input type="hidden" name="product_id" value="${card.id}">
+                                        <div class="input-group mb-3" style="max-width: 120px;">
+                                            <button class="btn btn-outline-secondary" type="button" id="dec-qty">–</button>
+                                            <input type="text" class="form-control text-center" id="qty" name="quantity" value="1">
+                                            <button class="btn btn-outline-secondary" type="button" id="inc-qty">+</button>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">Add to Cart</button>
+                                    </form>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `);
+
+        // Quantity buttons
+        if (!card.out_of_stock) {
+            let maxQty = card.quantity;
+
+            $.get('/cart/json', function(cart) {
+                const existingQty = parseInt(cart[card.id]) || 0;
+                maxQty -= existingQty;
+
+                if (maxQty <= 0) {
+                    $('#add-to-cart-form').html('<p class="text-danger">You already have the maximum available quantity in your cart.</p>');
+                    return;
+                }
+
+                $('#dec-qty').on('click', () => {
+                    let q = parseInt($('#qty').val()) || 1;
+                    if (q > 1) $('#qty').val(q - 1);
+                });
+
+                $('#inc-qty').on('click', () => {
+                    let q = parseInt($('#qty').val()) || 1;
+                    if (q < maxQty) {
+                        $('#qty').val(q + 1);
+                    } else {
+                        alert(`Only ${maxQty} more available to add to cart.`);
+                    }
+                });
+
+                $('#add-to-cart-form').on('submit', function(event) {
+                    event.preventDefault();
+                    let q = parseInt($('#qty').val()) || 1;
+                    if (q > maxQty) {
+                        alert(`Cannot add more than ${maxQty}.`);
+                        return;
+                    }
+
+                    const formData = $(this).serialize();
+
+                    $.ajax({
+                        type: 'POST',
+                        url: '/add_to_cart',
+                        data: formData,
+                        dataType: 'json',
+                        success(response) {
+                            if (response.success) {
+                                // Clear existing flash alerts
+                                $flashContainer.empty();
+
+                                // Inject new flash alert into global flash container
+                                // Inject new flash alert into global flash container
+                                $flashContainer.append(`
+                                    <div class="alert alert-success text-center mb-2" role="alert">
+                                        ${response.message}
+                                    </div>
+                                `);
+
+                                // Change button to "Already in Cart"
+                                $('#add-to-cart-form button[type="submit"]')
+                                    .removeClass('btn-primary')
+                                    .addClass('btn-secondary')
+                                    .attr('disabled', true)
+                                    .text('Already in Cart');
+
+                                // Auto-dismiss
+                                setTimeout(() => {
+                                    $flashContainer.children('.alert').fadeOut(500, function () {
+                                        $(this).remove();
+                                    });
+                                }, 3000);
+
+                                if (response.cart_total !== undefined) {
+                                    $cartTotal.text(response.cart_total);
+                                }
+                            } else {
+                                alert(response.error || 'Failed to add item to cart');
+                            }
+                        },
+                        error(xhr, status, error) {
+                            console.error("AJAX error:", error);
+                            console.log("Response text:", xhr.responseText);
+                            alert('Error adding item to cart');
+                        }
+                    });
+                });
+            });
+        }
+    });
+});
+</script>
+
+{% endblock content %}

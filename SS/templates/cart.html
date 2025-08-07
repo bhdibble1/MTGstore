@@ -1,0 +1,81 @@
+{% extends "navbar.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-12">
+        <div class="box-element">
+            <a class="btn btn-outline-dark" href="{{ url_for('main.products') }}">&#x2190; Continue Shopping</a>
+            <br><br>
+            <table class="table">
+                <tr>
+                    <th><h5>Items: <strong>{{ cart_items|length }}</strong></h5></th>
+                    <th><h5>Total: <strong>${{ "%.2f"|format(total) }}</strong></h5></th>
+                    <th>
+                        <!-- Only show the Checkout button if there is at least one item in the cart -->
+                        {% if cart_items|length > 0 %}
+                            <a style="float:right;" class="btn btn-dark" href="{{ url_for('main.checkout') }}">Checkout</a>
+                        {% endif %}
+                    </th>
+                </tr>
+            </table>
+        </div>
+
+        <br>
+        <div class="box-element">
+            <div class="cart-row font-weight-bold" style="align-items: center;">
+                <div style="flex:2"></div>
+                <div style="flex:2">Item</div>
+                <div style="flex:1">Price</div>
+                <div style="flex:1">Quantity</div>
+                <div style="flex:1">Total</div>
+                <div style="flex:1">Action</div>
+            </div>
+
+            {% for item in cart_items %}
+            {% set is_promo = item.product.product_name.lower() == 'free booster pack' %}
+            <div class="cart-row" style="align-items: center; {% if is_promo %} opacity: 0.7; {% endif %}">
+                <div style="flex:2">
+                    <img class="row-image icon" src="{{ item.product.product_image }}">
+                </div>
+
+                <div style="flex:2; display: flex; align-items: center;">
+                    <p class="mb-0">{{ item.product.product_name }}</p>
+                </div>
+
+                <div style="flex:1; display: flex; align-items: center;">
+                    <p class="mb-0">${{ "%.2f"|format(item.product.price) }}</p>
+                </div>
+
+                <!-- Quantity -->
+                <div style="flex:1; display: flex; align-items: center;">
+                    {% if is_promo %}
+                        <p class="mb-0">{{ item.quantity }}</p>
+                    {% else %}
+                        <form method="POST" action="{{ url_for('main.update_cart') }}" style="display: flex; border-radius: 10px; align-items: center; gap: 8px; width: 100%;">
+                            <input type="hidden" name="product_id" value="{{ item.product.id }}">
+                            <input type="number" name="quantity"
+                                   value="{{ item.quantity }}"
+                                   min="0" max="{{ item.product.quantity }}"
+                                   class="form-control form-control-sm text-center"
+                                   style="width: 60px;">
+                    {% endif %}
+                </div>
+
+                <!-- Subtotal -->
+                <div style="flex:1; display: flex; align-items: center;">
+                    <p class="mb-0">${{ "%.2f"|format(item.subtotal) }}</p>
+                </div>
+
+                <!-- Update Button -->
+                <div style="flex:1; display: flex; align-items: center;">
+                    {% if not is_promo %}
+                        <button type="submit" class="btn btn-sm btn-primary" style=" background-color: #3224f0;">Update</button>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock content %}

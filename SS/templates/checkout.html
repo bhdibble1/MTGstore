@@ -1,0 +1,53 @@
+{% extends 'navbar.html' %}
+
+{% block content %}
+<div style="padding-top: 30px"></div>
+<div class="container my-5">
+    <div class="row">
+        <!-- Checkout Form -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h4 class="mb-3">Payment Method</h4>
+                    <form action="{{ url_for('main.create_checkout_session') }}" method="POST">
+						<button type="submit" class="btn btn-success w-100">Pay with Card</button>
+                    </form>
+                    <div style="display: flex; justify-content: center; align-items: center;">
+                        <div>
+                          OR
+                        </div>
+                      </div>
+                    <form action="{{ url_for('main.create_bitcoin_checkout_session') }}" method="POST">
+                        <button type="submit" class="btn btn-primary w-100">Pay with Bitcoin</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Summary -->
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h4 class="mb-4">Order Summary</h4>
+
+                    {% for item in cart_items %}
+                    <div class="d-flex align-items-center mb-3">
+                        <img src="{{ item.image }}" class="img-thumbnail me-3" style="width: 60px; height: 60px; object-fit: cover;">
+                        <div class="flex-grow-1">
+                            <p class="ml-2 mb-0">{{ item.name }}</p>
+                            <small class="ml-2">${{ "%.2f"|format(item.price) }} x {{ item.quantity }}</small>
+                        </div>
+                        <strong class="text-end">${{ "%.2f"|format(item.price * item.quantity) }}</strong>
+                    </div>
+                    {% endfor %}
+
+                    <hr>
+                    <h5 class="mb-1">Items: {{ total_items }}</h5>
+                    <h5>Total: ${{ "%.2f"|format(cart_total_price) }}</h5>
+                    <a class="btn btn-outline-secondary mt-3 w-100" href="{{ url_for('main.cart') }}">&#x2190; Back to Cart</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
