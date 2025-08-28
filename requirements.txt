@@ -8,4 +8,5 @@ Flask-WTF
 requests
 stripe
 email-validator    # needed if your forms use EmailField / Email()
-# psycopg2-binary  # uncomment if you deploy with Postgres on Render
+# psycopg2-binary  # uncomment if you deploy with Postgres on Rendergunicorn
+
