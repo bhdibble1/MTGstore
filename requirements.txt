@@ -1,0 +1,11 @@
+Flask>=2.3,<4
+gunicorn>=21
+Flask-SQLAlchemy
+Flask-Bcrypt
+Flask-Login
+Flask-Migrate
+Flask-WTF
+requests
+stripe
+email-validator    # needed if your forms use EmailField / Email()
+# psycopg2-binary  # uncomment if you deploy with Postgres on Render
