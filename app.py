@@ -1,4 +1,4 @@
-from SS import create_app
+from SS.app import create_app
 from flask_migrate import Migrate
 from flask_admin import Admin
 from flask_admin.contrib.sqla import ModelView
