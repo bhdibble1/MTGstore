@@ -49,6 +49,10 @@ class Order(db.Model):
     tracking_carrier = db.Column(db.String(100), nullable=True)
     tracking_url = db.Column(db.String(200), nullable=True)
 
+    status = db.Column(db.String(32), default="pending")  # optional if you already have it
+    inventory_reduced = db.Column(db.Boolean, default=False, nullable=True)
+    confirmation_sent = db.Column(db.Boolean, default=False, nullable=True)
+
     def __repr__(self):
         return f"Order('{self.id}', '{self.order_date}', '{self.total}', '{self.user_id}')"
 

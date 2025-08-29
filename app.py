@@ -1,27 +1,55 @@
-from SS import create_app
-from flask_migrate import Migrate
-from flask_admin import Admin
-from flask_admin.contrib.sqla import ModelView
-from SS.models import db, Product, User, Order, OrderItem
+# app.py
+import os
+from flask import redirect, url_for, request
 from flask_login import current_user
+from flask_admin import Admin, AdminIndexView
+from flask_admin.contrib.sqla import ModelView
+
+from SS import create_app
+from SS.models import db, Product, User, Order, OrderItem
 
 app = create_app()
 
-# Custom AdminModelView that restricts access to admin users only
-class AdminModelView(ModelView):
+# Configure who can access /admin (env wins; falls back to your email)
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "Bhdibble@gmail.com").lower()
+
+def _is_admin() -> bool:
+    return current_user.is_authenticated and getattr(current_user, "email", "").lower() == ADMIN_EMAIL
+
+class SecureAdminIndexView(AdminIndexView):
     def is_accessible(self):
-        # Allow access only if user is authenticated and is an admin
-        return current_user.is_authenticated and current_user.email == 'Bhdibble@gmail.com'
+        return _is_admin()
 
-# Initialize Flask-Admin
-admin = Admin(app, name='Admin Panel', template_mode='bootstrap4')
+    def inaccessible_callback(self, name, **kwargs):
+        # Redirect non-admins to login; preserve destination
+        return redirect(url_for("main.login", next=request.url))
 
-# Add views to Flask-Admin using the custom AdminModelView for each model
-admin.add_view(AdminModelView(User, db.session))
-admin.add_view(AdminModelView(Product, db.session))
-admin.add_view(AdminModelView(Order, db.session))
-admin.add_view(AdminModelView(OrderItem, db.session))
+class SecureModelView(ModelView):
+    # Nice defaults; optional
+    can_view_details = True
+    page_size = 50
 
-# Start the app
-if __name__ == '__main__':
+    def is_accessible(self):
+        return _is_admin()
+
+    def inaccessible_callback(self, name, **kwargs):
+        return redirect(url_for("main.login", next=request.url))
+
+# Create admin with a secured index view
+admin = Admin(
+    app,
+    name="Admin Panel",
+    template_mode="bootstrap4",
+    index_view=SecureAdminIndexView(url="/admin", name="Dashboard"),
+)
+
+# Secure all model views
+admin.add_view(SecureModelView(User, db.session))
+admin.add_view(SecureModelView(Product, db.session))
+admin.add_view(SecureModelView(Order, db.session))
+admin.add_view(SecureModelView(OrderItem, db.session))
+
+if __name__ == "__main__":
+    # Local dev; Render uses gunicorn
     app.run(debug=True)
+

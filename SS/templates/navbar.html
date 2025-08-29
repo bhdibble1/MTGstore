@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Swift and Speedy Games</title>
+    <title>5 Star Mint</title>
     <link rel="icon" href="https://res.cloudinary.com/dzt95pn0s/image/upload/v1745552166/favicon_xh6goe.ico" type="image/x-icon">
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" /> 
@@ -27,7 +27,7 @@
 
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <a class="navbar-brand padding-l" href="{{ url_for('main.home') }}">
-    Swift and Speedy Games
+    5 Star Mint
   </a>
   <button class="navbar-toggler" type="button" data-toggle="collapse" 
           data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" 
@@ -41,6 +41,12 @@
         <a class="nav-link {% if request.endpoint=='main.home' %}active{% endif %}" 
            href="{{ url_for('main.home') }}">
           Home
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.endpoint=='main.about' %}active{% endif %}" 
+          href="{{ url_for('main.about') }}">
+        About
         </a>
       </li>
       {% if current_user.is_authenticated %}
@@ -79,7 +85,7 @@
 </nav>
 
 <!-- Flash messages -->
-<div id="flash-container" class="container" style="margin-top: 80px;">
+<div id="flash-container" class="container" style="margin-top: 80px; background-color: var(--dark-color-lighten);">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}

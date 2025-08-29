@@ -1,16 +1,23 @@
 from flask import Blueprint, render_template, redirect, url_for, request, flash, session, jsonify, request
 from SS.models import db, User, bcrypt, Product, Order, OrderItem
 from SS.forms import RegistrationForm, LoginForm
+from SS.emailer import send_email
 from flask_login import login_user, current_user, logout_user, login_required
 from flask import session
 import stripe
 import json
 import os
 import requests
+from datetime import datetime
+
 
 
 main = Blueprint('main', __name__)
 
+@main.route("/about")
+def about():
+    # Face-aware, square crop; tweak sizes as you like
+    return render_template("about.html")
 
 # utils/cart.py or just at the top of routes.py if small project
 @main.route('/cart/json')
@@ -360,77 +367,211 @@ def create_bitcoin_checkout_session():
         flash('Failed to create Bitcoin payment session. Please try again.', 'danger')
         return redirect(url_for('main.cart'))
 
+@main.route("/tasks/send-order-email", methods=["POST"])
+def task_send_order_email():
+    token = request.headers.get("X-Task-Token", "")
+    expected = os.environ.get("TASK_TOKEN", "")
+    if not expected or token != expected:
+        print("❌ email task unauthorized (bad/missing X-Task-Token)")
+        return "unauthorized", 401
+
+    data = request.get_json(silent=True) or {}
+    order_id = data.get("order_id")
+    email = data.get("email")
+    print(f"📬 email task received order_id={order_id}, email={email}")
+
+    if not order_id:
+        return "missing order_id", 400
+
+    from SS.models import db, Order, OrderItem, Product, User
+    order = Order.query.get(order_id)
+    if not order:
+        print("❌ order not found")
+        return "order not found", 404
+
+    if not email and getattr(order, "user_id", None):
+        u = User.query.get(order.user_id)
+        email = getattr(u, "email", None)
+
+    if not email:
+        print("ℹ️ no recipient email available; skipping send")
+        return "no recipient email", 200
+
+    items = OrderItem.query.filter_by(order_id=order.id).all()
+    lis = []
+    for oi in items:
+        p = Product.query.get(oi.product_id)
+        name = p.product_name if p else f"Product {oi.product_id}"
+        lis.append(f"<li>{oi.quantity} × {name} — ${float(oi.subtotal):.2f}</li>")
+
+    html = f"""
+    <h2>Thanks for your order!</h2>
+    <p>Order ID: <strong>{order.id}</strong></p>
+    <ul>{''.join(lis)}</ul>
+    <p>Total: <strong>${float(order.total):.2f}</strong></p>
+    """
+
+    from SS.emailer import send_email
+    ok = send_email(to=email, subject=f"Order #{order.id} confirmation", html=html)
+    print(f"📧 send_email returned: {ok}")
+
+    if ok and hasattr(order, "confirmation_sent"):
+        order.confirmation_sent = True
+        db.session.commit()
+
+    return ("sent", 200) if ok else ("send failed", 200)
+
+
 @main.route('/stripe-webhook', methods=['POST'])
 def stripe_webhook():
+    import os, json, stripe, traceback, requests
+    from datetime import datetime
+    from sqlalchemy.exc import SQLAlchemyError
+    from SS.models import db, Product, Order, OrderItem
+
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
-    endpoint_secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
-
-    print("🔔 Webhook triggered")
-    print("Signature Header:", sig_header)
+    secret = os.environ.get('STRIPE_WEBHOOK_SECRET')
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except stripe.error.SignatureVerificationError as e:
-        print("❌ Signature verification failed:", str(e))
-        return 'Signature verification failed', 400
-    except Exception as e:
-        print("❌ Other error:", str(e))
-        return 'Invalid payload', 400
+        event = stripe.Webhook.construct_event(payload, sig_header, secret)
+    except stripe.error.SignatureVerificationError:
+        return "bad signature", 400
+    except Exception:
+        return "invalid payload", 400
 
-    print("✅ Webhook event type:", event['type'])
+    etype = event.get("type")
 
-    if event['type'] == 'checkout.session.completed':
-        session_obj = event['data']['object']
-        metadata = session_obj.get('metadata', {})
-        print("Metadata received:", metadata)
+    def set_if_attr(obj, name, value):
+        if hasattr(obj, name):
+            setattr(obj, name, value)
 
-        cart = json.loads(metadata.get('cart', '{}'))
-        user_id = metadata.get('user_id') or None
-
-        if not cart:
-            print("❌ No cart found in metadata")
-            return 'No cart found', 400
-
+    def upsert_order_and_reduce_stock(meta, session_id=None, pi_id=None):
+        # cart from metadata (JSON string)
+        raw_cart = (meta or {}).get("cart", "{}")
         try:
-            # Create order
-            order = Order(user_id=user_id, total=0.00, order_date=datetime.utcnow())
+            cart = json.loads(raw_cart) if isinstance(raw_cart, str) else (raw_cart or {})
+        except Exception:
+            cart = {}
+
+        # optional user_id from metadata
+        user_id = (meta or {}).get("user_id")
+        if isinstance(user_id, str) and user_id.isdigit():
+            user_id = int(user_id)
+        else:
+            user_id = None
+
+        # try to find an existing order (idempotency)
+        order = None
+        try:
+            if session_id and hasattr(Order, "stripe_session_id"):
+                order = Order.query.filter_by(stripe_session_id=session_id).first()
+            if not order and pi_id and hasattr(Order, "payment_intent_id"):
+                order = Order.query.filter_by(payment_intent_id=pi_id).first()
+        except Exception:
+            pass
+
+        if not order:
+            order = Order(order_date=datetime.utcnow(), total=0.0)
+            if user_id and hasattr(order, "user_id"):
+                order.user_id = user_id
+            set_if_attr(order, "stripe_session_id", session_id)
+            set_if_attr(order, "payment_intent_id", pi_id)
+            set_if_attr(order, "status", "paid")
+            set_if_attr(order, "paid_at", datetime.utcnow())
+            set_if_attr(order, "inventory_reduced", False)
+            set_if_attr(order, "confirmation_sent", False)
             db.session.add(order)
-            db.session.commit()
-            print(f"📝 Order created with ID: {order.id}")
+            db.session.flush()  # ensure order.id
 
-            total_amount = 0.00
-            for product_id, quantity in cart.items():
-                product = Product.query.get(product_id)
-                if not product:
-                    print(f"⚠️ Product not found: {product_id}")
-                    continue
+        existing = {oi.product_id: oi for oi in OrderItem.query.filter_by(order_id=order.id).all()}
+        total = 0.0
 
-                item_total = product.price * quantity
-                total_amount += item_total
+        for pid_str, qty in (cart or {}).items():
+            try:
+                pid = int(pid_str); qty = int(qty)
+            except Exception:
+                continue
 
-                order_item = OrderItem(
-                    order_id=order.id,
-                    product_id=product.id,
-                    quantity=quantity,
-                    subtotal=item_total
+            product = Product.query.get(pid)
+            if not product:
+                continue
+
+            already = existing.get(pid).quantity if pid in existing else 0
+            delta = max(0, qty - already)
+
+            line_total = float(product.price) * qty
+            total += line_total
+
+            if pid in existing:
+                item = existing[pid]
+                item.quantity = qty
+                item.subtotal = line_total
+            else:
+                if qty > 0:
+                    db.session.add(OrderItem(
+                        order_id=order.id,
+                        product_id=pid,
+                        quantity=qty,
+                        subtotal=line_total
+                    ))
+
+            if delta > 0 and product.quantity is not None:
+                if delta > product.quantity:
+                    delta = product.quantity
+                product.quantity -= delta
+
+        order.total = total
+        set_if_attr(order, "status", "paid")
+        set_if_attr(order, "inventory_reduced", True)
+        db.session.commit()
+        return order.id  # return id we just updated/created
+
+    try:
+        if etype == "checkout.session.completed":
+            s = event["data"]["object"]
+            if s.get("payment_status") == "paid":
+                order_id = upsert_order_and_reduce_stock(
+                    meta=s.get("metadata") or {},
+                    session_id=s.get("id"),
+                    pi_id=s.get("payment_intent"),
                 )
-                db.session.add(order_item)
+                # pass customer email to the task (best available source)
+                customer_email = (s.get("customer_details") or {}).get("email") or s.get("customer_email")
+                task_token = os.environ.get("TASK_TOKEN", "")
+                if order_id and task_token:
+                    try:
+                        print(f"→ queue email task for order {order_id} to {customer_email}")
+                        requests.post(
+                            url_for('main.task_send_order_email', _external=True),
+                            json={"order_id": order_id, "email": customer_email},
+                            headers={"X-Task-Token": task_token},
+                            timeout=2,
+                        )
+                    except Exception as e:
+                        print("⚠️ email task post failed:", e)
+                else:
+                    if not task_token:
+                        print("⚠️ TASK_TOKEN not set; skipping email task.")
+                return "ok", 200
+            return "ignored (not paid)", 200
 
-                product.quantity -= quantity
-                print(f"🛒 Deducted {quantity} from {product.product_name}")
+        if etype == "payment_intent.succeeded":
+            # we’ll still reduce inventory here (idempotent) but skip email
+            pi = event["data"]["object"]
+            upsert_order_and_reduce_stock(meta=pi.get("metadata") or {}, pi_id=pi.get("id"))
+            return "ok", 200
 
-            order.total = total_amount
-            db.session.commit()
-            print("✅ Order and inventory successfully updated")
-            return 'Order created and stock updated', 200
-        except Exception as e:
-            print("❌ Error saving order:", str(e))
-            return 'Error processing order', 500
+    except SQLAlchemyError:
+        db.session.rollback()
+        traceback.print_exc()
+        return "db error", 500
+    except Exception:
+        db.session.rollback()
+        traceback.print_exc()
+        return "error", 500
 
-    print("⚠️ Unhandled event type:", event['type'])
-    return 'Unhandled event type', 400
-
+    return "ignored", 200
 
 
 @main.route('/payment-success')

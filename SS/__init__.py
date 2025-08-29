@@ -37,7 +37,6 @@ def create_app(config_class=None):
 
     # ✅ Initialize Stripe
     stripe.api_key = app.config['STRIPE_SECRET_KEY']
-    print(f"Stripe Secret Key from environment: {app.config['STRIPE_SECRET_KEY']}")
 
     # Initialize extensions with the app
     db.init_app(app)

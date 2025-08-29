@@ -1,0 +1,25 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "<4,>=2.3"
+gunicorn = ">=21"
+flask-sqlalchemy = "*"
+flask-bcrypt = "*"
+flask-login = "*"
+flask-migrate = "*"
+flask-wtf = "*"
+requests = "*"
+stripe = "*"
+email-validator = "*"
+psycopg2-binary = "*"
+flask-admin = "*"
+sendgrid = "*"
+resend = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.11"
